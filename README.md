@@ -1,17 +1,10 @@
 # jellyfin-stats
 
-Standalone generator for the SVG stats cards used in *State of the Fin* posts.
-Pulls activity data from the GitHub API and renders three card types as inline
-SVG (JSX-compatible, theme-aware via `currentColor`):
-
-- **Per-repo card** — issues closed, PRs merged, contributor count, team list,
-  new contributors, and a donut breakdown of team / returning / new contributors.
-- **Activity chart** — multi-line chart of merged PRs, closed issues, and
-  unique contributors across the trailing 12 months.
-- **Releases table** — latest release per configured repo.
-
-This project contains only the card-generation logic. Markdown / blog-post
-assembly lives in [`jellyfin-blog-stateofthefin`](../jellyfin-blog-stateofthefin).
+Generates a single SVG README banner per Jellyfin repo. Each banner is a
+self-contained card: gradient title strip with the repo name + tagline,
+the official Jellyfin "J" mark on a black banner, and the trailing
+30-day activity summary (issues closed, PRs merged, contributors, new
+contributors).
 
 ## Setup
 
@@ -22,53 +15,59 @@ pip install -r requirements.txt
 ```
 
 A GitHub token is read from `$GITHUB_TOKEN` or, if unset, `gh auth token`.
-Without a token the GitHub Search API rate-limits to 10 req/min.
+Without a token the Search API rate-limits to 10 req/min — fine for one
+repo, slow when sweeping the whole org.
 
 ## Usage
 
 ```bash
-# Generate every card (per-repo + activity + releases) for a date range.
-python3 generate.py --start 2026-04-01 --end 2026-05-01 --output-dir out/
+# Every active public repo across `jellyfin` and `jellyfin-labs` → banners/
+python3 generate.py
 
-# Single repo:
-python3 generate.py --start 2026-04-01 --end 2026-05-01 \
-    --repo jellyfin-roku --output-dir out/
+# Single repo (skips the discovery sweep)
+python3 generate.py --repo jellyfin-roku
 
-# No GitHub calls — useful for layout iteration on the SVG with mock data:
-python3 generate.py --simple --output-dir out/
+# Different orgs
+python3 generate.py --orgs jellyfin
+
+# Layout iteration — no API calls, zeroed stats
+python3 generate.py --simple --repo jellyfin-roku
 ```
 
-Output files:
+Output is `banners/<repo>.svg` (lowercase) per repo. The `jellyfin`
+server gets the special tagline `The Free Software Media System`;
+everything else gets `Part of the Jellyfin Project`.
 
-- `out/<repo>.svg` — one per configured repo with activity in the period
-- `out/activity.svg` — trailing 12-month chart
-- `out/releases.svg` — latest releases table
+## Automation
 
-## Configuration
+[`.github/workflows/banners.yml`](.github/workflows/banners.yml) regenerates
+every banner daily at midnight UTC and commits the changes to `banners/`.
+Trigger it manually from the Actions tab when needed. Once published,
+embed in a repo's README via:
 
-Three YAML files in `configuration/` drive the run:
+```markdown
+![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/<repo>.svg)
+```
 
-- `repos.yaml` — which repos to track, organised into `core`, `clients`,
-  `labs`, and `documentation` buckets. Sets the `org` and `labs_org`
-  defaults and a `labs_in_main_org` override list.
-- `team.yaml` — list of team usernames (with profile URLs). Used to split
-  contributors into "team" vs "community" in the donut chart.
-- `contributors.yaml` — per-repo maintainers (who get bolded in the team
-  list) and a blacklist of bot/noise accounts.
+## How it works
 
-These are the same files used by the blog project; copy or symlink as needed.
+- Repos are **discovered dynamically** from the GitHub API — every
+  public, non-archived, non-fork repo in the configured orgs gets a
+  banner. No `repos.yaml` to maintain.
+- Display names are derived from repo names (`jellyfin-roku` → `Jellyfin
+  Roku`, `Swiftfin` → `Swiftfin`). Internal capital letters are
+  preserved (`jellyfin-iOS` → `Jellyfin iOS`).
+- 30-day stats use the GitHub Search API. The "is this contributor new"
+  lookup is one request per contributor — that dominates the runtime
+  for active repos like `jellyfin` itself.
 
 ## Layout
 
 ```
 jellyfin_stats/
-  models.py     dataclasses for stats / releases / contributors config
-  config.py     YAML loaders
-  collector.py  GitHub API queries (rate-limited)
-  svg.py        pure SVG rendering primitives
-  cards.py      glue: stats + config -> SVG card strings
+  svg.py        build_banner_card + helpers (pure SVG, no I/O)
+  collector.py  GitHub Search queries (rate-limited)
+  repos.py      discover_repos + humanize
 generate.py     CLI entrypoint
+banners/        generated SVGs, written by the daily workflow
 ```
-
-`svg.py` and `models.py` have no GitHub or YAML dependencies — they can be
-imported standalone if you already have data in hand and just want the SVG.

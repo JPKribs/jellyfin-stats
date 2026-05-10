@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""Generate Jellyfin stats SVG cards.
+"""Generate one README banner SVG per Jellyfin repo.
 
-Writes one ``<repo>.svg`` per configured repo plus ``activity.svg`` and
-``releases.svg`` into the chosen output directory. Pass ``--repo`` to limit
-to a single repo (the activity / releases cards are skipped in that mode).
+Discovers repos dynamically from the configured GitHub orgs (default:
+`jellyfin` and `jellyfin-labs`), fetches the trailing 30-day stats from
+the Search API, and writes ``<repo>-banner.svg`` per repo into the output
+dir. No `repos.yaml` required.
 
 Examples
 --------
 
-    # Every configured repo, default trailing month
+    # All discovered repos, default last 30 days
     ./generate.py --output-dir out/
 
+    # Single repo (skips discovery, fetch + render that one)
+    ./generate.py --repo jellyfin-roku --output-dir out/
+
     # Explicit window
-    ./generate.py --start 2026-04-01 --end 2026-05-01 --output-dir out/
+    ./generate.py --end 2026-05-10 --output-dir out/
 
-    # Single repo card only
-    ./generate.py --repo jellyfin-roku --start 2026-04-01 --end 2026-05-01 \\
-        --output-dir out/
-
-    # No GitHub calls (renders empty cards — useful for layout iteration)
+    # Layout iteration — no API calls, zeroed stats, no welcome list
     ./generate.py --simple --output-dir out/
 """
 
@@ -26,142 +26,119 @@ import argparse
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from github import Auth, Github
 
-from jellyfin_stats.banners import build_banner
-from jellyfin_stats.cards import (
-    build_activity_chart,
-    build_releases_table,
-    build_repo_card,
-)
 from jellyfin_stats.collector import DataCollector
-from jellyfin_stats.config import expand_repos, load_config, load_contributors
-from jellyfin_stats.models import RangeData, RepoStats
+from jellyfin_stats.repos import DEFAULT_ORGS, discover_repos, humanize
+from jellyfin_stats.svg import build_banner_card
+
+WINDOW_DAYS = 30
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Generate SVG stats cards for Jellyfin repositories.",
+    p = argparse.ArgumentParser(
+        description="Generate Jellyfin README banner SVGs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--start", type=str, default=None,
-                        help="Window start date (YYYY-MM-DD). Defaults to one month before --end.")
-    parser.add_argument("--end", type=str, default=None,
-                        help="Window end date (YYYY-MM-DD). Defaults to today.")
-    parser.add_argument("--repo", type=str, default=None,
-                        help="Generate just this single repo's card. Skips activity/releases cards.")
-    parser.add_argument("--output-dir", type=str, default="out",
-                        help="Directory to write SVG files into (created if needed).")
-    parser.add_argument("--simple", action="store_true",
-                        help="Skip every GitHub API call. Cards render with zero stats; useful for layout iteration.")
-    return parser.parse_args()
+    p.add_argument("--end", type=str, default=None,
+                   help=f"Window end date (YYYY-MM-DD). Defaults to today (window is {WINDOW_DAYS} days back).")
+    p.add_argument("--repo", type=str, default=None,
+                   help="Generate just this single repo (skips discovery).")
+    p.add_argument("--org", type=str, default=None,
+                   help="Org owning --repo. Defaults to `jellyfin`.")
+    p.add_argument("--orgs", type=str, default=None,
+                   help=f"Comma-separated orgs to discover. Default: {','.join(DEFAULT_ORGS)}.")
+    p.add_argument("--output-dir", type=str, default="banners",
+                   help="Directory to write SVG files into (created if needed).")
+    p.add_argument("--simple", action="store_true",
+                   help="No GitHub API calls. Renders zeroed stats — useful for layout iteration.")
+    return p.parse_args()
 
 
-def _resolve_dates(start: Optional[str], end: Optional[str]) -> tuple[datetime, datetime]:
-    end_dt = datetime.strptime(end, "%Y-%m-%d") if end else datetime.now()
-    if start:
-        start_dt = datetime.strptime(start, "%Y-%m-%d")
-    else:
-        first_of_month = end_dt.replace(day=1)
-        if first_of_month.month == 1:
-            start_dt = first_of_month.replace(year=first_of_month.year - 1, month=12)
-        else:
-            start_dt = first_of_month.replace(month=first_of_month.month - 1)
-    return start_dt, end_dt
+def _resolve_window(end_arg: str | None) -> tuple[str, str]:
+    end = datetime.strptime(end_arg, "%Y-%m-%d") if end_arg else datetime.now(UTC).replace(tzinfo=None)
+    end = end.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=WINDOW_DAYS)
+    return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def _resolve_token() -> Optional[str]:
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        return token
+def _resolve_token() -> str | None:
+    if t := os.environ.get("GITHUB_TOKEN"):
+        return t
     try:
-        result = subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
+        r = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and r.stdout.strip():
             print("  Using token from gh CLI.", file=sys.stderr)
-            return result.stdout.strip()
+            return r.stdout.strip()
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
     return None
 
 
-def _empty_range(start: datetime, end: datetime) -> RangeData:
-    return RangeData(
-        start_date=start,
-        end_date=end,
-        monthly_stats=[],
-        chart_monthly_stats=[],
-        unique_contributors=set(),
-        yearly_contributors=set(),
-        releases=[],
-        repo_stats={},
-        latest_releases=[],
-    )
-
-
-def _write(path: str, svg: str) -> None:
-    if not svg:
-        return
-    with open(path, "w") as f:
-        f.write(svg)
-    print(f"  wrote {path}", file=sys.stderr)
+def _stats_for(collector: DataCollector, repo: str, org: str, start: str, end: str) -> tuple[int, int, int, int]:
+    """Return (closed_issues, merged_prs, contributors, new_contributors)."""
+    closed = collector.count_closed_issues(repo, org, start, end)
+    merged = collector.count_merged_prs(repo, org, start, end)
+    if merged == 0:
+        return closed, 0, 0, 0
+    authors = sorted({a for a in collector.fetch_merged_pr_authors(repo, org, start, end) if a})
+    new_count = sum(1 for a in authors if not collector.has_prior_repo_pr(repo, org, a, start))
+    return closed, merged, len(authors), new_count
 
 
 def main() -> None:
     args = parse_args()
-    start, end = _resolve_dates(args.start, args.end)
-    print(f"Window: {start:%Y-%m-%d} → {end:%Y-%m-%d}", file=sys.stderr)
+    start_str, end_str = _resolve_window(args.end)
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    config = load_config()
-    contributors = load_contributors()
-    repos = expand_repos(config)
+    print(f"Window: {start_str} → {end_str}", file=sys.stderr)
 
-    if args.repo:
-        if args.repo not in repos:
-            print(f"Error: '{args.repo}' is not in repos.yaml. "
-                  f"Known: {', '.join(sorted(repos))}", file=sys.stderr)
-            raise SystemExit(2)
-        repos = {args.repo: repos[args.repo]}
-
+    # Resolve which repos to render
     if args.simple:
-        print("Simple mode: skipping GitHub API calls.", file=sys.stderr)
-        range_data = _empty_range(start, end)
-        for name, meta in repos.items():
-            range_data.repo_stats[name] = RepoStats(name=name, display_name=meta["display"])
+        if args.repo:
+            repos = [(args.repo, humanize(args.repo), args.org or "jellyfin")]
+        else:
+            print("Error: --simple requires --repo (no API → no discovery).", file=sys.stderr)
+            raise SystemExit(2)
     else:
         token = _resolve_token()
         if not token:
             print("Warning: no GitHub token; API rate limits will be tight.", file=sys.stderr)
         gh = Github(auth=Auth.Token(token) if token else None, per_page=100)
-        collector = DataCollector(gh, config.get("org", "jellyfin"), contributors)
-        range_data = collector.collect_range_data(start, end, repos)
+        if args.repo:
+            repos = [(args.repo, humanize(args.repo), args.org or "jellyfin")]
+        else:
+            orgs = [s.strip() for s in args.orgs.split(",")] if args.orgs else None
+            print(f"Discovering repos from {', '.join(orgs or DEFAULT_ORGS)}...", file=sys.stderr)
+            repos = list(discover_repos(gh, orgs))
+            print(f"Found {len(repos)} repos.", file=sys.stderr)
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    collector = None if args.simple else DataCollector(gh)
 
-    for repo_key, meta in repos.items():
-        stats = range_data.repo_stats.get(repo_key) or RepoStats(
-            name=repo_key, display_name=meta["display"],
+    for repo, display, org in repos:
+        if args.simple:
+            closed = merged = contributors = new_count = 0
+        else:
+            print(f"  [{repo}] fetching stats...", file=sys.stderr)
+            closed, merged, contributors, new_count = _stats_for(collector, repo, org, start_str, end_str)
+            print(f"    issues={closed} prs={merged} contribs={contributors} new={new_count}", file=sys.stderr)
+
+        svg = build_banner_card(
+            repo=repo,
+            display_name=display,
+            closed=closed,
+            merged=merged,
+            contributors=contributors,
+            new_contributors=new_count,
+            gradient_id=f"banner-{repo.lower()}-grad",
         )
-        svg = build_repo_card(stats, title=meta["display"], contributors=contributors)
-        if svg:
-            _write(os.path.join(args.output_dir, f"{repo_key}.svg"), svg)
-
-        # Banners are pure HTML (no API needed) — always emit one per repo,
-        # even in --simple mode.
-        _write(
-            os.path.join(args.output_dir, f"{repo_key}-banner.md"),
-            build_banner(repo_key, meta["display"]),
-        )
-
-    if not args.repo:
-        _write(os.path.join(args.output_dir, "activity.svg"),
-               build_activity_chart(range_data))
-        _write(os.path.join(args.output_dir, "releases.svg"),
-               build_releases_table(range_data))
+        path = out_dir / f"{repo.lower()}.svg"
+        path.write_text(svg)
+        print(f"    wrote {path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
