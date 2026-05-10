@@ -33,7 +33,7 @@ from github import Auth, Github
 
 from jellyfin_stats.collector import DataCollector
 from jellyfin_stats.repos import DEFAULT_ORGS, discover_repos, humanize
-from jellyfin_stats.svg import build_banner_card
+from jellyfin_stats.svg import build_banner_card, build_banner_plain
 
 WINDOW_DAYS = 30
 
@@ -93,7 +93,10 @@ def main() -> None:
     args = parse_args()
     start_str, end_str = _resolve_window(args.end)
     out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    plain_dir = out_dir / "plain"
+    complete_dir = out_dir / "complete"
+    plain_dir.mkdir(parents=True, exist_ok=True)
+    complete_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Window: {start_str} → {end_str}", file=sys.stderr)
 
@@ -120,6 +123,16 @@ def main() -> None:
     collector = None if args.simple else DataCollector(gh)
 
     for repo, display, org in repos:
+        slug = repo.lower()
+        gradient_id = f"banner-{slug}-grad"
+
+        # Plain banner — name + tagline + Jellyfin mark, no API needed
+        plain_svg = build_banner_plain(repo, display, gradient_id)
+        plain_path = plain_dir / f"{slug}.svg"
+        plain_path.write_text(plain_svg)
+        print(f"  [{repo}] wrote {plain_path}", file=sys.stderr)
+
+        # Complete banner — adds the 30-day stats row
         if args.simple:
             closed = merged = contributors = new_count = 0
         else:
@@ -127,18 +140,24 @@ def main() -> None:
             closed, merged, contributors, new_count = _stats_for(collector, repo, org, start_str, end_str)
             print(f"    issues={closed} prs={merged} contribs={contributors} new={new_count}", file=sys.stderr)
 
-        svg = build_banner_card(
-            repo=repo,
-            display_name=display,
-            closed=closed,
-            merged=merged,
-            contributors=contributors,
-            new_contributors=new_count,
-            gradient_id=f"banner-{repo.lower()}-grad",
-        )
-        path = out_dir / f"{repo.lower()}.svg"
-        path.write_text(svg)
-        print(f"    wrote {path}", file=sys.stderr)
+        complete_path = complete_dir / f"{slug}.svg"
+        if not any((closed, merged, contributors, new_count)):
+            # Nothing happened in the window — mirror the plain banner so the
+            # complete URL still resolves but doesn't display an empty state.
+            complete_path.write_text(plain_svg)
+            print(f"    no activity → mirrored plain to {complete_path}", file=sys.stderr)
+        else:
+            svg = build_banner_card(
+                repo=repo,
+                display_name=display,
+                closed=closed,
+                merged=merged,
+                contributors=contributors,
+                new_contributors=new_count,
+                gradient_id=gradient_id,
+            )
+            complete_path.write_text(svg)
+            print(f"    wrote {complete_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

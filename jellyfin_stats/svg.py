@@ -76,7 +76,94 @@ def _jellyfin_logo(x: float, y: float, size: float, gradient_id: str) -> str:
     )
 
 
-# MARK: - Banner card
+# MARK: - Banner cards
+
+def _emit_top_zone(
+    parts: list[str],
+    *,
+    width: int,
+    title_h: int,
+    banner_h: int,
+    height: int,
+    gradient_id: str,
+    display_name: str,
+    tagline: str,
+    font: str,
+) -> None:
+    """Append the shared chrome (title strip + dark zone + J mark) to ``parts``.
+
+    The dark zone fills from the bottom of the title strip down to the card's
+    bottom edge — so the same fragment works for the plain banner (height ==
+    title_h + banner_h) and the complete banner (height includes a stats
+    zone below the mark).
+    """
+    parts.append(
+        f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" '
+        f'font-size="22" font-weight="700" font-family="{font}" '
+        f'fill="#ffffff">{_xml_escape(display_name)}</text>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="56" text-anchor="middle" '
+        f'font-size="13" font-family="{font}" '
+        f'fill="#ffffff" opacity="0.85">{_xml_escape(tagline)}</text>'
+    )
+    parts.append(
+        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
+        f'height="{height - title_h - 0.75}" fill="#000b25"/>'
+    )
+    mark_size = 100
+    mark_x = width / 2 - mark_size / 2
+    mark_y = title_h + (banner_h - mark_size) / 2
+    parts.append(_jellyfin_logo(mark_x, mark_y, mark_size, gradient_id))
+
+
+def _open_svg(width: int, height: int, gradient_id: str, label: str) -> list[str]:
+    return [
+        f'<svg viewBox="0 0 {width} {height}" width="100%" '
+        'xmlns="http://www.w3.org/2000/svg" role="img" '
+        f'aria-label="{_xml_escape(label)}">',
+        f'<defs><linearGradient id="{gradient_id}" x1="0" y1="0" x2="1" y2="0">'
+        f'<stop offset="0%" stop-color="{GRADIENT_START}"/>'
+        f'<stop offset="100%" stop-color="{GRADIENT_END}"/>'
+        '</linearGradient></defs>',
+    ]
+
+
+def _outer_border(width: int, height: int, gradient_id: str) -> str:
+    return (
+        f'<rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" '
+        f'rx="10" ry="10" fill="none" stroke="url(#{gradient_id})" stroke-width="1.5"/>'
+    )
+
+
+def build_banner_plain(repo: str, display_name: str, gradient_id: str) -> str:
+    """Plain README banner: gradient title strip + Jellyfin "J" mark, no stats.
+
+    Static — only changes when the repo is renamed (display name updates) or
+    moves between the server and the rest (tagline updates). Useful for
+    repos where you don't want a daily commit churning the README.
+    """
+    width = 720
+    title_h = 70
+    banner_h = 144
+    height = title_h + banner_h
+    tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
+    font = TITLE_FONT_FAMILY
+
+    parts = _open_svg(width, height, gradient_id, display_name)
+    _emit_top_zone(
+        parts,
+        width=width, title_h=title_h, banner_h=banner_h, height=height,
+        gradient_id=gradient_id, display_name=display_name,
+        tagline=tagline, font=font,
+    )
+    parts.append(_outer_border(width, height, gradient_id))
+    parts.append('</svg>')
+    return ''.join(parts)
+
 
 def build_banner_card(
     repo: str,
@@ -113,45 +200,13 @@ def build_banner_card(
     tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
     font = TITLE_FONT_FAMILY  # one font throughout the banner
 
-    parts: list[str] = []
-    parts.append(
-        f'<svg viewBox="0 0 {width} {height}" width="100%" '
-        'xmlns="http://www.w3.org/2000/svg" role="img" '
-        f'aria-label="{_xml_escape(display_name)}">'
+    parts = _open_svg(width, height, gradient_id, display_name)
+    _emit_top_zone(
+        parts,
+        width=width, title_h=title_h, banner_h=banner_h, height=height,
+        gradient_id=gradient_id, display_name=display_name,
+        tagline=tagline, font=font,
     )
-    parts.append(
-        f'<defs><linearGradient id="{gradient_id}" x1="0" y1="0" x2="1" y2="0">'
-        f'<stop offset="0%" stop-color="{GRADIENT_START}"/>'
-        f'<stop offset="100%" stop-color="{GRADIENT_END}"/>'
-        '</linearGradient></defs>'
-    )
-
-    # 1. Title strip — gradient with display name + tagline
-    parts.append(
-        f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
-    )
-    parts.append(
-        f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" '
-        f'font-size="22" font-weight="700" font-family="{font}" '
-        f'fill="#ffffff">{_xml_escape(display_name)}</text>'
-    )
-    parts.append(
-        f'<text x="{width / 2:.1f}" y="56" text-anchor="middle" '
-        f'font-size="13" font-family="{font}" '
-        f'fill="#ffffff" opacity="0.85">{_xml_escape(tagline)}</text>'
-    )
-
-    # 2. + 3. Single dark area below the gradient title — covers both the
-    # banner mark and the stats / welcome zone so they read as one branded
-    # block.
-    parts.append(
-        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
-        f'height="{height - title_h - 0.75}" fill="#000b25"/>'
-    )
-    mark_size = 100
-    mark_x = width / 2 - mark_size / 2
-    mark_y = title_h + (banner_h - mark_size) / 2
-    parts.append(_jellyfin_logo(mark_x, mark_y, mark_size, gradient_id))
 
     # Stats row — trailing 30-day summary, white text against the dark area
     stats_y = title_h + banner_h
@@ -195,11 +250,6 @@ def build_banner_card(
             f'fill="#ffffff" opacity="0.7">No activity in the last 30 days</text>'
         )
 
-    # Outer rounded border last so it sits over the title/banner strip edges
-    parts.append(
-        f'<rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" '
-        f'rx="10" ry="10" fill="none" stroke="url(#{gradient_id})" stroke-width="1.5"/>'
-    )
-
+    parts.append(_outer_border(width, height, gradient_id))
     parts.append('</svg>')
     return ''.join(parts)

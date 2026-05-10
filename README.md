@@ -1,10 +1,13 @@
 # jellyfin-stats
 
-Generates a single SVG README banner per Jellyfin repo. Each banner is a
-self-contained card: gradient title strip with the repo name + tagline,
-the official Jellyfin "J" mark on a black banner, and the trailing
-30-day activity summary (issues closed, PRs merged, contributors, new
-contributors).
+Generates two SVG README banners per Jellyfin repo:
+
+- **`banners/plain/<repo>.svg`** — gradient title strip with the repo name +
+  tagline, plus the official Jellyfin "J" mark on a black banner. Static
+  (no stats) — only changes if the repo gets renamed or moves orgs.
+- **`banners/complete/<repo>.svg`** — same chrome, plus the trailing
+  30-day activity summary (issues closed, PRs merged, contributors, new
+  contributors). Updated daily by the workflow.
 
 ## Setup
 
@@ -34,19 +37,24 @@ python3 generate.py --orgs jellyfin
 python3 generate.py --simple --repo jellyfin-roku
 ```
 
-Output is `banners/<repo>.svg` (lowercase) per repo. The `jellyfin`
-server gets the special tagline `The Free Software Media System`;
-everything else gets `Part of the Jellyfin Project`.
+Each repo gets a pair of files: `banners/plain/<repo>.svg` and
+`banners/complete/<repo>.svg` (lowercase). The `jellyfin` server gets the
+special tagline `The Free Software Media System`; everything else gets
+`Part of the Jellyfin Project`.
 
 ## Automation
 
 [`.github/workflows/banners.yml`](.github/workflows/banners.yml) regenerates
 every banner daily at midnight UTC and commits the changes to `banners/`.
 Trigger it manually from the Actions tab when needed. Once published,
-embed in a repo's README via:
+embed in a repo's README via either:
 
 ```markdown
-![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/<repo>.svg)
+<!-- static — no stats, no daily churn -->
+![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/plain/<repo>.svg)
+
+<!-- live 30-day activity summary -->
+![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/complete/<repo>.svg)
 ```
 
 ## How it works
