@@ -1,0 +1,88 @@
+maintainers:
+- username: 1hitsong
+  name: 1hitsong
+  url: https://github.com/sponsors/1hitsong
+  repos:
+  - jellyfin-roku
+- username: andrewrabert
+  name: Andrew Rabert
+  url: https://github.com/andrewrabert
+  repos:
+  - jellyfin-desktop
+  - jellyfin-desktop-qt
+- username: anthonylavado
+  name: Anthony Lavado
+  url: https://github.com/sponsors/anthonylavado
+  repos:
+  - jellyfin-tizen
+  - jellyfin-webos
+- username: Bond-009
+  name: Bond_009
+  url: https://github.com/sponsors/Bond-009
+  repos:
+  - jellyfin
+- username: ferferga
+  name: Fernando Fernández
+  url: https://github.com/sponsors/ferferga
+  repos:
+  - jellyfin-vue
+- username: joshuaboniface
+  name: Joshua Boniface
+  url: https://github.com/sponsors/joshuaboniface
+  repos:
+  - jellyfin
+  - jellyfin.org
+- username: JPKribs
+  name: Joe Kribs
+  url: https://github.com/JPKribs
+  repos:
+  - Swiftfin
+- username: JPVenson
+  name: Jean-Pierre Bachmann
+  url: https://coff.ee/venson
+  repos:
+  - jellyfin
+  - jellyfin-xbox
+- username: LePips
+  name: Ethan Pippin
+  url: https://github.com/sponsors/LePips
+  repos:
+  - Swiftfin
+- username: mcarlton00
+  name: MCarlton00
+  url: https://github.com/mcarlton00
+  repos:
+  - jellycon
+  - jellyfin-kodi
+- username: nielsvanvelzen
+  name: Niels van Velzen
+  url: https://github.com/sponsors/nielsvanvelzen
+  repos:
+  - jellyfin
+  - jellyfin-android
+  - jellyfin-androidtv
+- username: oddstr13
+  name: Odd Stråbø
+  url: https://github.com/sponsors/oddstr13
+  repos:
+  - jellyfin-kodi
+- username: theguymadmax
+  name: theguymadmax
+  url: https://github.com/theguymadmax
+  repos:
+  - jellyfin
+- username: thornbill
+  name: Bill Thornton
+  url: https://github.com/sponsors/thornbill
+  repos:
+  - jellyfin-iOS
+  - jellyfin-web
+- username: TimGels
+  name: Tim Gels
+  url: https://github.com/sponsors/TimGels
+  repos:
+  - jellyfin-xbox
+blacklist:
+- dependabot[bot]
+- jellyfin-bot
+- renovate[bot]

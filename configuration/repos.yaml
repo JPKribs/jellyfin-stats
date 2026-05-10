@@ -1,0 +1,27 @@
+org: jellyfin
+labs_org: jellyfin-labs
+core:
+  jellyfin: Jellyfin
+  jellyfin-web: Jellyfin Web
+clients:
+  jellyfin-android: Jellyfin for Android
+  jellyfin-androidtv: Jellyfin for Android TV
+  jellyfin-desktop: Jellyfin for Desktop
+  jellyfin-iOS: Jellyfin for iOS
+  jellyfin-kodi: Jellyfin for Kodi
+  jellyfin-roku: Jellyfin for Roku
+  jellyfin-tizen: Jellyfin for Tizen
+  jellyfin-webOS: Jellyfin for WebOS
+  jellyfin-xbox: Jellyfin for Xbox
+labs:
+  jellycon: Jellyfin Kodi Addon
+  jellyfin-titanos: Jellyfin for TitanOS
+  jellyfin-vega: Jellyfin for VegaOS
+  jellyfin-vue: Jellyfin Vue
+  Swiftfin: Swiftfin
+documentation:
+  jellyfin.org: Jellyfin.org
+labs_in_main_org:
+- jellycon
+- jellyfin-vue
+- Swiftfin
