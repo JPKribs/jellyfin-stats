@@ -121,14 +121,28 @@ def _emit_top_zone(
 
 
 def _open_svg(width: int, height: int, gradient_id: str, label: str) -> list[str]:
+    """Emit the `<svg>` opener + `<defs>` (gradient + rounded-card clipPath).
+
+    The clipPath matches the outer rounded border so the dark fill below
+    the title strip doesn't leak past the curve at the bottom corners.
+    Callers are expected to wrap their inner content in a
+    ``<g clip-path="url(#{gradient_id}-clip)">…</g>`` and emit the border
+    after the closing ``</g>`` so the stroke renders un-clipped on top.
+    """
     return [
         f'<svg viewBox="0 0 {width} {height}" width="100%" '
         'xmlns="http://www.w3.org/2000/svg" role="img" '
         f'aria-label="{_xml_escape(label)}">',
-        f'<defs><linearGradient id="{gradient_id}" x1="0" y1="0" x2="1" y2="0">'
+        f'<defs>'
+        f'<linearGradient id="{gradient_id}" x1="0" y1="0" x2="1" y2="0">'
         f'<stop offset="0%" stop-color="{GRADIENT_START}"/>'
         f'<stop offset="100%" stop-color="{GRADIENT_END}"/>'
-        '</linearGradient></defs>',
+        f'</linearGradient>'
+        f'<clipPath id="{gradient_id}-clip">'
+        f'<rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" '
+        f'rx="10" ry="10"/>'
+        f'</clipPath>'
+        f'</defs>',
     ]
 
 
@@ -154,12 +168,14 @@ def build_banner_plain(repo: str, display_name: str, gradient_id: str) -> str:
     font = TITLE_FONT_FAMILY
 
     parts = _open_svg(width, height, gradient_id, display_name)
+    parts.append(f'<g clip-path="url(#{gradient_id}-clip)">')
     _emit_top_zone(
         parts,
         width=width, title_h=title_h, banner_h=banner_h, height=height,
         gradient_id=gradient_id, display_name=display_name,
         tagline=tagline, font=font,
     )
+    parts.append('</g>')
     parts.append(_outer_border(width, height, gradient_id))
     parts.append('</svg>')
     return ''.join(parts)
@@ -201,6 +217,7 @@ def build_banner_card(
     font = TITLE_FONT_FAMILY  # one font throughout the banner
 
     parts = _open_svg(width, height, gradient_id, display_name)
+    parts.append(f'<g clip-path="url(#{gradient_id}-clip)">')
     _emit_top_zone(
         parts,
         width=width, title_h=title_h, banner_h=banner_h, height=height,
@@ -250,6 +267,7 @@ def build_banner_card(
             f'fill="#ffffff" opacity="0.7">No activity in the last 30 days</text>'
         )
 
+    parts.append('</g>')
     parts.append(_outer_border(width, height, gradient_id))
     parts.append('</svg>')
     return ''.join(parts)
