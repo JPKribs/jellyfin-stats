@@ -1,81 +1,66 @@
 # jellyfin-stats
 
-Generates two SVG README banners per Jellyfin repo:
+Daily-regenerated SVG README banners for every public repo across
+`jellyfin` and `jellyfin-labs`. Each repo gets two flavors:
 
-- **`banners/plain/<repo>.svg`** — gradient title strip with the repo name +
-  tagline, plus the official Jellyfin "J" mark on a black banner. Static
-  (no stats) — only changes if the repo gets renamed or moves orgs.
-- **`banners/complete/<repo>.svg`** — same chrome, plus the trailing
+- **plain** (`banners/plain/<repo>.svg`) — name + Jellyfin mark, static
+- **complete** (`banners/complete/<repo>.svg`) — adds the trailing
   30-day activity summary (issues closed, PRs merged, contributors, new
-  contributors). Updated daily by the workflow.
+  contributors). Mirrors the plain banner when nothing happened in the
+  window, so the URL always resolves.
 
-## Setup
+The `jellyfin` server gets the tagline "The Free Software Media
+System"; everything else gets "Part of the Jellyfin Project".
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+## Embed
 
-A GitHub token is read from `$GITHUB_TOKEN` or, if unset, `gh auth token`.
-Without a token the Search API rate-limits to 10 req/min — fine for one
-repo, slow when sweeping the whole org.
+### Jellyfin
 
-## Usage
-
-```bash
-# Every active public repo across `jellyfin` and `jellyfin-labs` → banners/
-python3 generate.py
-
-# Single repo (skips the discovery sweep)
-python3 generate.py --repo jellyfin-roku
-
-# Different orgs
-python3 generate.py --orgs jellyfin
-
-# Layout iteration — no API calls, zeroed stats
-python3 generate.py --simple --repo jellyfin-roku
-```
-
-Each repo gets a pair of files: `banners/plain/<repo>.svg` and
-`banners/complete/<repo>.svg` (lowercase). The `jellyfin` server gets the
-special tagline `The Free Software Media System`; everything else gets
-`Part of the Jellyfin Project`.
-
-## Automation
-
-[`.github/workflows/banners.yml`](.github/workflows/banners.yml) regenerates
-every banner daily at midnight UTC and commits the changes to `banners/`.
-Trigger it manually from the Actions tab when needed. Once published,
-embed in a repo's README via either:
+![Jellyfin plain](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/plain/jellyfin.svg)
 
 ```markdown
-<!-- static — no stats, no daily churn -->
-![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/plain/<repo>.svg)
-
-<!-- live 30-day activity summary -->
-![Banner](https://raw.githubusercontent.com/<owner>/jellyfin-stats/main/banners/complete/<repo>.svg)
+![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/plain/jellyfin.svg)
 ```
 
-## How it works
+![Jellyfin complete](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/complete/jellyfin.svg)
 
-- Repos are **discovered dynamically** from the GitHub API — every
-  public, non-archived, non-fork repo in the configured orgs gets a
-  banner. No `repos.yaml` to maintain.
-- Display names are derived from repo names (`jellyfin-roku` → `Jellyfin
-  Roku`, `Swiftfin` → `Swiftfin`). Internal capital letters are
-  preserved (`jellyfin-iOS` → `Jellyfin iOS`).
-- 30-day stats use the GitHub Search API. The "is this contributor new"
-  lookup is one request per contributor — that dominates the runtime
-  for active repos like `jellyfin` itself.
-
-## Layout
-
+```markdown
+![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/complete/jellyfin.svg)
 ```
-jellyfin_stats/
-  svg.py        build_banner_card + helpers (pure SVG, no I/O)
-  collector.py  GitHub Search queries (rate-limited)
-  repos.py      discover_repos + humanize
-generate.py     CLI entrypoint
-banners/        generated SVGs, written by the daily workflow
+
+### Jellyfin Web
+
+![Jellyfin Web plain](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/plain/jellyfin-web.svg)
+
+```markdown
+![Jellyfin Web](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/plain/jellyfin-web.svg)
 ```
+
+![Jellyfin Web complete](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/complete/jellyfin-web.svg)
+
+```markdown
+![Jellyfin Web](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/complete/jellyfin-web.svg)
+```
+
+Same pattern for any other repo — substitute the slug in the URL.
+
+## Generation
+
+Regenerated daily at 00:00 UTC by
+[`banners.yml`](.github/workflows/banners.yml). Trigger manually from
+the Actions tab. The workflow needs Settings → Actions → General →
+Workflow permissions → "Read and write permissions" enabled to commit
+back to `main`.
+
+Local generation:
+
+```bash
+pip install -r requirements.txt
+python generate.py                          # all repos in default orgs
+python generate.py --repo jellyfin-roku     # one repo
+python generate.py --simple --repo jellyfin # layout iteration, no API
+```
+
+`GITHUB_TOKEN` is read from env or `gh auth token`. Without it the
+Search API is rate-limited to 10 req/min (vs 30 authenticated) and full
+sweeps get slow.

@@ -101,20 +101,20 @@ def _emit_top_zone(
         f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
     )
     parts.append(
-        f'<text x="{width / 2:.1f}" y="34" text-anchor="middle" '
-        f'font-size="22" font-weight="700" font-family="{font}" '
+        f'<text x="{width / 2:.1f}" y="51" text-anchor="middle" '
+        f'font-size="33" font-weight="700" font-family="{font}" '
         f'fill="#ffffff">{_xml_escape(display_name)}</text>'
     )
     parts.append(
-        f'<text x="{width / 2:.1f}" y="56" text-anchor="middle" '
-        f'font-size="13" font-family="{font}" '
+        f'<text x="{width / 2:.1f}" y="84" text-anchor="middle" '
+        f'font-size="20" font-family="{font}" '
         f'fill="#ffffff" opacity="0.85">{_xml_escape(tagline)}</text>'
     )
     parts.append(
         f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
         f'height="{height - title_h - 0.75}" fill="#000b25"/>'
     )
-    mark_size = 100
+    mark_size = 150
     mark_x = width / 2 - mark_size / 2
     mark_y = title_h + (banner_h - mark_size) / 2
     parts.append(_jellyfin_logo(mark_x, mark_y, mark_size, gradient_id))
@@ -146,9 +146,9 @@ def build_banner_plain(repo: str, display_name: str, gradient_id: str) -> str:
     moves between the server and the rest (tagline updates). Useful for
     repos where you don't want a daily commit churning the README.
     """
-    width = 720
-    title_h = 70
-    banner_h = 144
+    width = 1080
+    title_h = 105
+    banner_h = 216
     height = title_h + banner_h
     tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
     font = TITLE_FONT_FAMILY
@@ -188,13 +188,13 @@ def build_banner_card(
          dropped; if everything is zero the row reads "No activity in the
          last 30 days".
     """
-    width = 720
-    pad_x = 24
+    width = 1080
+    pad_x = 36
     content_w = width - 2 * pad_x
 
-    title_h = 70
-    banner_h = 144  # 5:1 aspect to match banner-logo-solid.svg
-    stats_h = 106   # subtitle baseline at +82 with 24px below to card edge
+    title_h = 105
+    banner_h = 216  # 5:1 aspect to match banner-logo-solid.svg
+    stats_h = 159   # subtitle baseline at +123 with 36px below to card edge
     height = title_h + banner_h + stats_h
 
     tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
@@ -220,9 +220,9 @@ def build_banner_card(
     if new_contributors:
         items.append((new_contributors, "New Contributors" if new_contributors != 1 else "New Contributor", GRADIENT_START))
 
-    label_baseline = stats_y + 22
-    value_baseline = stats_y + 52
-    subtitle_baseline = stats_y + 82
+    label_baseline = stats_y + 33
+    value_baseline = stats_y + 78
+    subtitle_baseline = stats_y + 123
 
     if items:
         n = len(items)
@@ -230,23 +230,23 @@ def build_banner_card(
             cx = pad_x + content_w * (2 * i + 1) / (2 * n)
             parts.append(
                 f'<text x="{cx:.1f}" y="{label_baseline:.1f}" text-anchor="middle" '
-                f'font-size="12" font-family="{font}" '
+                f'font-size="18" font-family="{font}" '
                 f'fill="#ffffff" opacity="0.85">{_xml_escape(label)}</text>'
             )
             parts.append(
                 f'<text x="{cx:.1f}" y="{value_baseline:.1f}" text-anchor="middle" '
-                f'font-size="24" font-weight="700" font-family="{font}" '
+                f'font-size="36" font-weight="700" font-family="{font}" '
                 f'fill="{color}">{value:,}</text>'
             )
         parts.append(
             f'<text x="{width / 2:.1f}" y="{subtitle_baseline:.1f}" text-anchor="middle" '
-            f'font-size="10" font-family="{font}" '
+            f'font-size="15" font-family="{font}" '
             f'fill="#ffffff" opacity="0.6">Last 30 Days</text>'
         )
     else:
         parts.append(
-            f'<text x="{width / 2:.1f}" y="{stats_y + stats_h / 2 + 5:.1f}" text-anchor="middle" '
-            f'font-size="13" font-family="{font}" '
+            f'<text x="{width / 2:.1f}" y="{stats_y + stats_h / 2 + 7:.1f}" text-anchor="middle" '
+            f'font-size="20" font-family="{font}" '
             f'fill="#ffffff" opacity="0.7">No activity in the last 30 days</text>'
         )
 
