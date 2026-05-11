@@ -8,15 +8,59 @@ from typing import Iterator
 
 from github import Github
 
-# Orgs we sweep for banner-eligible repos. The two cover everything:
-# `jellyfin` for the server, web, official clients, and most labs;
-# `jellyfin-labs` for the small number of incubating projects hosted
-# off the main org.
+# Orgs we sweep for banner-eligible repos.
 DEFAULT_ORGS = ["jellyfin", "jellyfin-labs"]
 
-# Repos that aren't really part of the user-facing surface — boilerplate
-# org-profile repo, pure forks the API misses, etc. Keep this small.
 _SKIP_NAMES = {".github"}
+
+DISPLAY_NAMES = {
+    "jellyfin-web":                  "Jellyfin for Web",
+
+    "jellyfin-android":              "Jellyfin for Android",
+    "jellyfin-androidtv":            "Jellyfin for Android TV",
+    "jellyfin-desktop":              "Jellyfin for Desktop",
+    "jellyfin-iOS":                  "Jellyfin for iOS",
+    "jellyfin-kodi":                 "Jellyfin for Kodi",
+    "jellyfin-roku":                 "Jellyfin for Roku",
+    "jellyfin-tizen":                "Jellyfin for Tizen",
+    "jellyfin-webOS":                "Jellyfin for WebOS",
+    "jellyfin-xbox":                 "Jellyfin for Xbox",
+
+    "jellycon":                      "Jellyfin for Kodi Addon",
+    "jellyfin-titanos":              "Jellyfin for TitanOS",
+    "jellyfin-vega":                 "Jellyfin for VegaOS",
+    "jellyfin-vue":                  "Jellyfin Vue",
+    "Swiftfin":                      "Swiftfin",
+
+    "jellyfin.org":                  "Jellyfin.org",
+
+    "jellyfin-sdk-csharp":           "Jellyfin SDK for C#",
+    "jellyfin-sdk-swift":            "Jellyfin SDK for Swift",
+    "jellyfin-sdk-kotlin":           "Jellyfin SDK for Kotlin",
+    "jellyfin-sdk-typescript":       "Jellyfin SDK for TypeScript",
+    "jellyfin-apiclient-javascript": "Jellyfin SDK for JavaScript",
+    "jellyfin-apiclient-python":     "Jellyfin SDK for Python",
+}
+
+WORD_CASING = {
+    "sdk":     "SDK",
+    "api":     "API",
+    "mpv":     "MPV",
+    "vlc":     "VLC",
+    "ui":      "UI",
+    "ux":      "UX",
+    "tv":      "TV",
+    "ios":     "iOS",
+    "tvos":    "tvOS",
+    "macos":   "macOS",
+    "watchos": "watchOS",
+    "ipados":  "iPadOS",
+    "webos":   "WebOS",
+    "titanos": "TitanOS",
+    "vegaos":  "VegaOS",
+}
+
+_DISPLAY_NAMES_LOWER = {k.lower(): v for k, v in DISPLAY_NAMES.items()}
 
 
 def discover_repos(gh: Github, orgs: list[str] | None = None) -> Iterator[tuple[str, str, str]]:
@@ -36,32 +80,40 @@ def discover_repos(gh: Github, orgs: list[str] | None = None) -> Iterator[tuple[
 def humanize(repo_name: str) -> str:
     """Generate a display name from a repo name.
 
-    Rules:
-      - ``jellyfin`` → ``Jellyfin``
-      - ``jellyfin-<x>`` → ``Jellyfin <X>`` (each dash-segment title-cased,
-        but internal capitals preserved so ``jellyfin-iOS`` becomes
-        ``Jellyfin iOS`` rather than ``Jellyfin Ios``)
-      - Anything else (e.g. ``Swiftfin``, ``jellycon``) is returned with
-        only its first letter capitalized if it was all-lowercase, else
-        unchanged.
+    Resolution order:
+      1. Explicit override in ``DISPLAY_NAMES`` (case-insensitive lookup).
+      2. ``jellyfin`` → ``Jellyfin``.
+      3. ``jellyfin-<x>`` → ``Jellyfin <X>`` with each dash-segment passed
+         through ``_apply_casing`` — known acronyms (SDK, API, …) and
+         brand-cased words (iOS, tvOS, …) get their canonical form;
+         everything else is title-cased while preserving any internal
+         capitals.
+      4. Anything else (e.g. ``Swiftfin``, ``jellycon``) is returned with
+         its first letter capitalized if it was all-lowercase, else
+         unchanged.
     """
+    if (override := _DISPLAY_NAMES_LOWER.get(repo_name.lower())) is not None:
+        return override
     if repo_name == "jellyfin":
         return "Jellyfin"
     if repo_name.startswith("jellyfin-"):
         suffix = repo_name[len("jellyfin-"):]
-        words = [_titlecase_keep_caps(w) for w in suffix.split("-") if w]
+        words = [_apply_casing(w) for w in suffix.split("-") if w]
         return "Jellyfin " + " ".join(words)
     return repo_name if any(ch.isupper() for ch in repo_name) else repo_name.capitalize()
 
 
-def _titlecase_keep_caps(word: str) -> str:
-    """Capitalize all-lowercase words; preserve any word with internal caps.
+def _apply_casing(word: str) -> str:
+    """Canonical casing for a name segment.
 
-    ``android`` → ``Android``; ``iOS`` → ``iOS``; ``webOS`` → ``webOS``.
-    Lossy for all-lowercase compound words like ``androidtv`` (becomes
-    ``Androidtv``) and intentionally-lowercase brand-style words — rare
-    enough trade-offs to live with.
+    Looks the lowercase form up in ``WORD_CASING`` first; falls back to
+    capitalize-or-preserve so ``android`` → ``Android`` and ``iOS`` →
+    ``iOS``. Lossy for all-lowercase compound words like ``androidtv``
+    (becomes ``Androidtv``) — those should go in ``DISPLAY_NAMES``.
     """
+    canonical = WORD_CASING.get(word.lower())
+    if canonical is not None:
+        return canonical
     if not word or any(ch.isupper() for ch in word):
         return word
     return word.capitalize()
