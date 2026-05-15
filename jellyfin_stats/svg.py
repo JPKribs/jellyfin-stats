@@ -12,6 +12,8 @@ banner reads consistently regardless of the host page's theme.
 No GitHub or YAML dependencies — pass in the data and get back the SVG.
 """
 
+import math
+
 
 # MARK: - Palette + fonts
 
@@ -22,6 +24,7 @@ COLOR_ISSUES = "#ef4444"
 COLOR_CONTRIBS = "#eab308"
 
 TITLE_FONT_FAMILY = "Plus Jakarta Sans, system-ui, -apple-system, Segoe UI, sans-serif"
+MONO_FONT_FAMILY = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
 
 JELLYFIN_TAGLINE = "The Free Software Media System"
 PROJECT_TAGLINE = "Part of the Jellyfin Project"
@@ -93,9 +96,9 @@ def _emit_top_zone(
     """Append the shared chrome (title strip + dark zone + J mark) to ``parts``.
 
     The dark zone fills from the bottom of the title strip down to the card's
-    bottom edge — so the same fragment works for the plain banner (height ==
-    title_h + banner_h) and the complete banner (height includes a stats
-    zone below the mark).
+    bottom edge — so the same fragment works for the simple banner (height ==
+    title_h + banner_h) and the contributor-stats banner (height includes a
+    stats zone below the mark).
     """
     parts.append(
         f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
@@ -146,6 +149,65 @@ def _open_svg(width: int, height: int, gradient_id: str, label: str) -> list[str
     ]
 
 
+def _spread_names(names: list[str]) -> list[str]:
+    """Permutation of ``names`` that walks the input with a stride coprime
+    to ``len(names)``, so consecutive slots in the rain land on
+    non-adjacent contributors instead of clustering by alphabet.
+
+    Deterministic — same input list always produces the same output. The
+    walk visits every name exactly once before any repetition.
+    """
+    n = len(names)
+    if n <= 1:
+        return list(names)
+    for s in (47, 41, 37, 31, 29, 23, 19, 17, 13, 11, 7, 5, 3, 2):
+        if math.gcd(s, n) == 1:
+            return [names[(k * s) % n] for k in range(n)]
+    return list(names)
+
+
+def _rain_slot_layout(
+    contributors_list: list[str],
+    new_contributor_names: list[str] | None,
+    n_lanes: int = 5,
+    min_slots_per_lane: int = 3,
+) -> tuple[list[str], int]:
+    """Return ``(slot_logins, slots_per_lane)`` for the rain banners.
+
+    ``slots_per_lane`` scales up with pool size so every contributor lands in
+    at least one visible slot — ``visible_slots = n_lanes * slots_per_lane``
+    is always ``>= len(contributors_list)``. New contributors get priority
+    placement (band 0 of each lane, then band 1, ...). Remaining slots cycle
+    through non-new contributors first (guaranteeing coverage even when the
+    pool is exactly the slot count), then wrap to the full pool so new
+    contributors can reappear in the overflow.
+    """
+    new_set = set(new_contributor_names or ())
+    n_pool = len(contributors_list)
+    if n_pool:
+        slots_per_lane = max(min_slots_per_lane, math.ceil(n_pool / n_lanes))
+    else:
+        slots_per_lane = min_slots_per_lane
+    visible_slots = n_lanes * slots_per_lane
+    priority_order = [
+        lane * slots_per_lane + band
+        for band in range(slots_per_lane)
+        for lane in range(n_lanes)
+    ]
+    slot_logins: list[str] = [""] * visible_slots
+    for pos, new_name in zip(priority_order, new_contributor_names or ()):
+        if pos < visible_slots:
+            slot_logins[pos] = new_name
+    non_new = [n for n in contributors_list if n not in new_set]
+    cycle_pool = _spread_names(non_new) + _spread_names(contributors_list)
+    cycle_idx = 0
+    for i in range(visible_slots):
+        if not slot_logins[i] and cycle_pool:
+            slot_logins[i] = cycle_pool[cycle_idx % len(cycle_pool)]
+            cycle_idx += 1
+    return slot_logins, slots_per_lane
+
+
 def _outer_border(width: int, height: int, gradient_id: str) -> str:
     return (
         f'<rect x="0.75" y="0.75" width="{width - 1.5}" height="{height - 1.5}" '
@@ -153,8 +215,8 @@ def _outer_border(width: int, height: int, gradient_id: str) -> str:
     )
 
 
-def build_banner_plain(repo: str, display_name: str, gradient_id: str) -> str:
-    """Plain README banner: gradient title strip + Jellyfin "J" mark, no stats.
+def build_banner_simple(repo: str, display_name: str, gradient_id: str) -> str:
+    """Simple README banner: gradient title strip + Jellyfin "J" mark, no stats.
 
     Static — only changes when the repo is renamed (display name updates) or
     moves between the server and the rest (tagline updates). Useful for
@@ -181,7 +243,7 @@ def build_banner_plain(repo: str, display_name: str, gradient_id: str) -> str:
     return ''.join(parts)
 
 
-def build_banner_card(
+def build_banner_contributor_stats(
     repo: str,
     display_name: str,
     closed: int,
@@ -265,6 +327,373 @@ def build_banner_card(
             f'<text x="{width / 2:.1f}" y="{stats_y + stats_h / 2 + 7:.1f}" text-anchor="middle" '
             f'font-size="20" font-family="{font}" '
             f'fill="#ffffff" opacity="0.7">No activity in the last 30 days</text>'
+        )
+
+    parts.append('</g>')
+    parts.append(_outer_border(width, height, gradient_id))
+    parts.append('</svg>')
+    return ''.join(parts)
+
+
+def build_banner_contributor_icons(
+    repo: str,
+    display_name: str,
+    closed: int,
+    merged: int,
+    contributors: int,
+    new_contributors: int,
+    contributors_list: list[str],
+    avatar_uris: dict[str, str],
+    gradient_id: str,
+    new_contributor_names: list[str] | None = None,
+) -> str:
+    """README banner SVG: title strip, Matrix-style falling contributor avatars,
+    J mark + stats row in front.
+
+    Same brick-pattern rain as ``build_banner_contributor_names`` but each slot
+    is a circular contributor avatar instead of a text login. New contributors
+    get a Jellyfin-gradient ring around their circle (the avatar analog of the
+    bold-name treatment). Avatars are deduplicated via ``<defs>`` + ``<use>``
+    so each person's base64 PNG is only embedded once even though the rain
+    re-references them across 30 slot positions.
+    """
+    width = 1080
+    pad_x = 36
+    content_w = width - 2 * pad_x
+
+    title_h = 105
+    banner_h = 216
+    stats_h = 159
+    height = title_h + banner_h + stats_h
+
+    tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
+    font = TITLE_FONT_FAMILY
+    new_set = set(new_contributor_names or ())
+    rain_clip_id = f"{gradient_id}-rain-clip"
+
+    # Rain layout — slots_per_lane scales with pool so every contributor lands
+    # in at least one slot. Stack height + dur scale together so fall speed
+    # stays constant (42 px/s) regardless of pool size.
+    row_h = 70
+    fall_rate = 42.0
+    avatar_size = 56
+    radius = avatar_size / 2
+
+    slot_logins, slots_per_lane = _rain_slot_layout(
+        contributors_list, new_contributor_names,
+    )
+    n_bands = 2 * slots_per_lane
+    stack_h = n_bands * row_h
+    fall_dur = stack_h / fall_rate
+
+    wide_xs = [width / 6, width / 2, 5 * width / 6]
+    narrow_xs = [width / 3, 2 * width / 3]
+    wide_bands = list(range(0, n_bands, 2))
+    narrow_bands = list(range(1, n_bands, 2))
+    lanes: list[tuple[float, list[int]]] = (
+        [(x, wide_bands) for x in wide_xs]
+        + [(x, narrow_bands) for x in narrow_xs]
+    )
+
+    used_logins = [login for login in dict.fromkeys(slot_logins) if login]
+
+    parts = _open_svg(width, height, gradient_id, display_name)
+
+    # Extra defs: rain clip + one symbol per avatar that's actually used.
+    parts.append('<defs>')
+    parts.append(
+        f'<clipPath id="{rain_clip_id}">'
+        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
+        f'height="{height - title_h - 0.75}"/>'
+        f'</clipPath>'
+    )
+    avatar_clip_id = f"{gradient_id}-avatar-clip"
+    parts.append(
+        f'<clipPath id="{avatar_clip_id}">'
+        f'<circle cx="0" cy="0" r="{radius:.2f}"/>'
+        f'</clipPath>'
+    )
+    avatar_symbols: dict[str, str] = {}
+    for idx, login in enumerate(used_logins):
+        uri = avatar_uris.get(login)
+        symbol_id = f"{gradient_id}-av-{idx}"
+        avatar_symbols[login] = symbol_id
+        parts.append(f'<g id="{symbol_id}">')
+        if uri:
+            parts.append(
+                f'<image href="{uri}" x="{-radius:.2f}" y="{-radius:.2f}" '
+                f'width="{avatar_size:.2f}" height="{avatar_size:.2f}" '
+                f'clip-path="url(#{avatar_clip_id})" '
+                f'preserveAspectRatio="xMidYMid slice"/>'
+            )
+        else:
+            parts.append(
+                f'<circle cx="0" cy="0" r="{radius:.2f}" fill="#1a1f3a"/>'
+            )
+        if login in new_set:
+            parts.append(
+                f'<circle cx="0" cy="0" r="{radius:.2f}" fill="none" '
+                f'stroke="url(#{gradient_id})" stroke-width="2.5"/>'
+            )
+        parts.append('</g>')
+    parts.append('</defs>')
+
+    parts.append(f'<g clip-path="url(#{gradient_id}-clip)">')
+
+    # Title strip
+    parts.append(
+        f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="51" text-anchor="middle" '
+        f'font-size="33" font-weight="700" font-family="{font}" '
+        f'fill="#ffffff">{_xml_escape(display_name)}</text>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="84" text-anchor="middle" '
+        f'font-size="20" font-family="{font}" '
+        f'fill="#ffffff" opacity="0.85">{_xml_escape(tagline)}</text>'
+    )
+    # Dark zone
+    parts.append(
+        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
+        f'height="{height - title_h - 0.75}" fill="#000b25"/>'
+    )
+
+    # Avatar rain — same brick layout as the names variant.
+    if slot_logins and avatar_symbols:
+        n_slots = len(slot_logins)
+        parts.append(
+            f'<g opacity="0.4" clip-path="url(#{rain_clip_id})">'
+        )
+        slot_offset = 0
+        for lane_idx, (lane_x, lane_bands) in enumerate(lanes):
+            begin = -((lane_idx * 1.91) % fall_dur)
+            parts.append(
+                f'<g transform="translate({lane_x:.2f},{title_h})">'
+                f'<g>'
+                f'<animateTransform attributeName="transform" type="translate" '
+                f'values="0,{-stack_h};0,0" dur="{fall_dur:.2f}s" '
+                f'begin="{begin:.2f}s" repeatCount="indefinite"/>'
+            )
+            for copy_idx in range(2):
+                for r, band in enumerate(lane_bands):
+                    y = copy_idx * stack_h + (band + 0.5) * row_h
+                    login = slot_logins[(slot_offset + r) % n_slots]
+                    symbol_id = avatar_symbols.get(login)
+                    if symbol_id:
+                        parts.append(f'<use href="#{symbol_id}" y="{y:.1f}"/>')
+            parts.append('</g></g>')
+            slot_offset += len(lane_bands)
+        parts.append('</g>')
+
+    # Jellyfin "J" mark — foreground (in front of the avatar rain)
+    mark_size = 150
+    mark_x = width / 2 - mark_size / 2
+    mark_y = title_h + (banner_h - mark_size) / 2
+    parts.append(_jellyfin_logo(mark_x, mark_y, mark_size, gradient_id))
+
+    # Stats row — same content as build_banner_contributor_stats
+    stats_y = title_h + banner_h
+    items: list[tuple[int, str, str]] = []
+    if closed:
+        items.append((closed, "Issues Closed" if closed != 1 else "Issue Closed", COLOR_ISSUES))
+    if merged:
+        items.append((merged, "PRs Merged" if merged != 1 else "PR Merged", COLOR_PRS))
+    if contributors:
+        items.append((contributors, "Contributors" if contributors != 1 else "Contributor", COLOR_CONTRIBS))
+    if new_contributors:
+        items.append((new_contributors, "New Contributors" if new_contributors != 1 else "New Contributor", GRADIENT_START))
+
+    label_baseline = stats_y + 33
+    value_baseline = stats_y + 78
+    subtitle_baseline = stats_y + 123
+
+    if items:
+        n_items = len(items)
+        for i, (value, label, color) in enumerate(items):
+            cx_text = pad_x + content_w * (2 * i + 1) / (2 * n_items)
+            parts.append(
+                f'<text x="{cx_text:.1f}" y="{label_baseline:.1f}" text-anchor="middle" '
+                f'font-size="18" font-family="{font}" '
+                f'fill="#ffffff" opacity="0.85">{_xml_escape(label)}</text>'
+            )
+            parts.append(
+                f'<text x="{cx_text:.1f}" y="{value_baseline:.1f}" text-anchor="middle" '
+                f'font-size="36" font-weight="700" font-family="{font}" '
+                f'fill="{color}">{value:,}</text>'
+            )
+        parts.append(
+            f'<text x="{width / 2:.1f}" y="{subtitle_baseline:.1f}" text-anchor="middle" '
+            f'font-size="15" font-family="{font}" '
+            f'fill="#ffffff" opacity="0.6">Last 30 Days</text>'
+        )
+
+    parts.append('</g>')
+    parts.append(_outer_border(width, height, gradient_id))
+    parts.append('</svg>')
+    return ''.join(parts)
+
+
+def build_banner_contributor_names(
+    repo: str,
+    display_name: str,
+    closed: int,
+    merged: int,
+    contributors: int,
+    new_contributors: int,
+    contributors_list: list[str],
+    gradient_id: str,
+    new_contributor_names: list[str] | None = None,
+) -> str:
+    """README banner SVG with Matrix-style falling contributor names in the background.
+
+    Layout matches ``build_banner_contributor_stats`` exactly — gradient title strip, dark
+    zone with centered Jellyfin "J" mark, 30-day stats row — but with an
+    animated "rain" layer of contributor names sandwiched between the dark
+    background and the foreground (mark + stats). The rain renders at 25%
+    opacity so it reads as ambient texture, not primary content.
+
+    Animation is SMIL ``<animateTransform>`` — works in browsers and in GitHub
+    README ``<img>`` embeds. Output is deterministic: re-running on the same
+    inputs produces byte-identical SVG.
+    """
+    width = 1080
+    pad_x = 36
+    content_w = width - 2 * pad_x
+
+    title_h = 105
+    banner_h = 216
+    stats_h = 159
+    height = title_h + banner_h + stats_h
+
+    tagline = JELLYFIN_TAGLINE if repo == "jellyfin" else PROJECT_TAGLINE
+    font = TITLE_FONT_FAMILY
+    mono = MONO_FONT_FAMILY
+    rain_clip_id = f"{gradient_id}-rain-clip"
+
+    # Rain layout — slots_per_lane scales with pool size so every contributor
+    # is guaranteed to land in at least one visible slot. The W-N-W-N alternation
+    # stays continuous across stack-copy seams (n_bands is always even). All
+    # lanes share fall_dur (= stack_h / fall_rate) so brick alignment never
+    # drifts; per-lane begin offsets spread the visible name set.
+    row_h = 70
+    fall_rate = 42.0
+    rain_font_size = 16
+
+    new_set = set(new_contributor_names or ())
+    slot_logins, slots_per_lane = _rain_slot_layout(
+        contributors_list, new_contributor_names,
+    )
+    n_bands = 2 * slots_per_lane
+    stack_h = n_bands * row_h
+    fall_dur = stack_h / fall_rate
+
+    parts = _open_svg(width, height, gradient_id, display_name)
+    parts.append(
+        f'<defs><clipPath id="{rain_clip_id}">'
+        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
+        f'height="{height - title_h - 0.75}"/>'
+        f'</clipPath></defs>'
+    )
+
+    parts.append(f'<g clip-path="url(#{gradient_id}-clip)">')
+
+    parts.append(
+        f'<path d="{_banner_path(width, title_h)}" fill="url(#{gradient_id})"/>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="51" text-anchor="middle" '
+        f'font-size="33" font-weight="700" font-family="{font}" '
+        f'fill="#ffffff">{_xml_escape(display_name)}</text>'
+    )
+    parts.append(
+        f'<text x="{width / 2:.1f}" y="84" text-anchor="middle" '
+        f'font-size="20" font-family="{font}" '
+        f'fill="#ffffff" opacity="0.85">{_xml_escape(tagline)}</text>'
+    )
+    parts.append(
+        f'<rect x="0.75" y="{title_h}" width="{width - 1.5}" '
+        f'height="{height - title_h - 0.75}" fill="#000b25"/>'
+    )
+
+    # Matrix rain — between dark zone and foreground.
+    if contributors_list:
+        wide_xs = [width / 6, width / 2, 5 * width / 6]
+        narrow_xs = [width / 3, 2 * width / 3]
+        wide_bands = list(range(0, n_bands, 2))
+        narrow_bands = list(range(1, n_bands, 2))
+        lanes: list[tuple[float, list[int]]] = (
+            [(x, wide_bands) for x in wide_xs]
+            + [(x, narrow_bands) for x in narrow_xs]
+        )
+        names = slot_logins
+        n_names = len(names)
+
+        parts.append(
+            f'<g opacity="0.25" clip-path="url(#{rain_clip_id})" '
+            f'font-family="{mono}" font-size="{rain_font_size}" '
+            f'fill="#ffffff" text-anchor="middle">'
+        )
+        slot_offset = 0
+        for lane_idx, (lane_x, lane_bands) in enumerate(lanes):
+            begin = -((lane_idx * 1.91) % fall_dur)
+            parts.append(
+                f'<g transform="translate({lane_x:.2f},{title_h})">'
+                f'<g>'
+                f'<animateTransform attributeName="transform" type="translate" '
+                f'values="0,{-stack_h};0,0" dur="{fall_dur:.2f}s" '
+                f'begin="{begin:.2f}s" repeatCount="indefinite"/>'
+            )
+            # Two stacked copies → seamless wrap on animation restart.
+            for copy_idx in range(2):
+                for r, band in enumerate(lane_bands):
+                    y = copy_idx * stack_h + (band + 0.5) * row_h
+                    name = names[(slot_offset + r) % n_names]
+                    weight = ' font-weight="700"' if name in new_set else ''
+                    parts.append(f'<text y="{y:.1f}"{weight}>{_xml_escape(name)}</text>')
+            parts.append('</g></g>')
+            slot_offset += len(lane_bands)
+        parts.append('</g>')
+
+    mark_size = 150
+    mark_x = width / 2 - mark_size / 2
+    mark_y = title_h + (banner_h - mark_size) / 2
+    parts.append(_jellyfin_logo(mark_x, mark_y, mark_size, gradient_id))
+
+    stats_y = title_h + banner_h
+    items: list[tuple[int, str, str]] = []
+    if closed:
+        items.append((closed, "Issues Closed" if closed != 1 else "Issue Closed", COLOR_ISSUES))
+    if merged:
+        items.append((merged, "PRs Merged" if merged != 1 else "PR Merged", COLOR_PRS))
+    if contributors:
+        items.append((contributors, "Contributors" if contributors != 1 else "Contributor", COLOR_CONTRIBS))
+    if new_contributors:
+        items.append((new_contributors, "New Contributors" if new_contributors != 1 else "New Contributor", GRADIENT_START))
+
+    label_baseline = stats_y + 33
+    value_baseline = stats_y + 78
+    subtitle_baseline = stats_y + 123
+
+    if items:
+        n = len(items)
+        for i, (value, label, color) in enumerate(items):
+            cx = pad_x + content_w * (2 * i + 1) / (2 * n)
+            parts.append(
+                f'<text x="{cx:.1f}" y="{label_baseline:.1f}" text-anchor="middle" '
+                f'font-size="18" font-family="{font}" '
+                f'fill="#ffffff" opacity="0.85">{_xml_escape(label)}</text>'
+            )
+            parts.append(
+                f'<text x="{cx:.1f}" y="{value_baseline:.1f}" text-anchor="middle" '
+                f'font-size="36" font-weight="700" font-family="{font}" '
+                f'fill="{color}">{value:,}</text>'
+            )
+        parts.append(
+            f'<text x="{width / 2:.1f}" y="{subtitle_baseline:.1f}" text-anchor="middle" '
+            f'font-size="15" font-family="{font}" '
+            f'fill="#ffffff" opacity="0.6">Last 30 Days</text>'
         )
 
     parts.append('</g>')
