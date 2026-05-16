@@ -20,7 +20,7 @@ System". Everything else gets "Part of the Jellyfin Project".
 
 ## Example Embeds
 
-### Jellyfin
+### Jellyfin - Simple
 
 ![Jellyfin simple](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/simple/jellyfin.svg)
 
@@ -28,11 +28,15 @@ System". Everything else gets "Part of the Jellyfin Project".
 ![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/simple/jellyfin.svg)
 ```
 
+### Jellyfin - Contributor Stats
+
 ![Jellyfin contributor-stats](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-stats/jellyfin.svg)
 
 ```markdown
 ![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-stats/jellyfin.svg)
 ```
+
+### Jellyfin - Contributor Names
 
 ![Jellyfin contributor-names](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-names/jellyfin.svg)
 
@@ -40,13 +44,15 @@ System". Everything else gets "Part of the Jellyfin Project".
 ![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-names/jellyfin.svg)
 ```
 
+### Jellyfin - Contributor Icons
+
 ![Jellyfin contributor-icons](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-icons/jellyfin.svg)
 
 ```markdown
 ![Jellyfin](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-icons/jellyfin.svg)
 ```
 
-### Jellyfin Web
+### Jellyfin for Web - Simple
 
 ![Jellyfin Web simple](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/simple/jellyfin-web.svg)
 
@@ -54,17 +60,23 @@ System". Everything else gets "Part of the Jellyfin Project".
 ![Jellyfin Web](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/simple/jellyfin-web.svg)
 ```
 
+### Jellyfin for Web - Contributor Stats
+
 ![Jellyfin Web contributor-stats](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-stats/jellyfin-web.svg)
 
 ```markdown
 ![Jellyfin Web](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-stats/jellyfin-web.svg)
 ```
 
+### Jellyfin for Web - Contributor Names
+
 ![Jellyfin Web contributor-names](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-names/jellyfin-web.svg)
 
 ```markdown
 ![Jellyfin Web](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-names/jellyfin-web.svg)
 ```
+
+### Jellyfin for Web - Contributor Icons
 
 ![Jellyfin Web contributor-icons](https://raw.githubusercontent.com/JPKribs/jellyfin-stats/main/banners/contributor-icons/jellyfin-web.svg)
 
