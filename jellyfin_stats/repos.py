@@ -14,11 +14,11 @@ DEFAULT_ORGS = ["jellyfin", "jellyfin-labs"]
 _SKIP_NAMES = {".github"}
 
 DISPLAY_NAMES = {
-    "jellyfin-web":                  "Jellyfin for Web",
+    "jellyfin-web":                  "Jellyfin Web",
 
     "jellyfin-android":              "Jellyfin for Android",
     "jellyfin-androidtv":            "Jellyfin for Android TV",
-    "jellyfin-desktop":              "Jellyfin for Desktop",
+    "jellyfin-desktop":              "Jellyfin Desktop",
     "jellyfin-iOS":                  "Jellyfin for iOS",
     "jellyfin-kodi":                 "Jellyfin for Kodi",
     "jellyfin-roku":                 "Jellyfin for Roku",
@@ -26,7 +26,7 @@ DISPLAY_NAMES = {
     "jellyfin-webOS":                "Jellyfin for WebOS",
     "jellyfin-xbox":                 "Jellyfin for Xbox",
 
-    "jellycon":                      "Jellyfin for Kodi Addon",
+    "jellycon":                      "Jellyfin Kodi Addon",
     "jellyfin-titanos":              "Jellyfin for TitanOS",
     "jellyfin-vega":                 "Jellyfin for VegaOS",
     "jellyfin-vue":                  "Jellyfin Vue",
@@ -34,12 +34,12 @@ DISPLAY_NAMES = {
 
     "jellyfin.org":                  "Jellyfin.org",
 
-    "jellyfin-sdk-csharp":           "Jellyfin SDK for C#",
-    "jellyfin-sdk-swift":            "Jellyfin SDK for Swift",
-    "jellyfin-sdk-kotlin":           "Jellyfin SDK for Kotlin",
-    "jellyfin-sdk-typescript":       "Jellyfin SDK for TypeScript",
-    "jellyfin-apiclient-javascript": "Jellyfin SDK for JavaScript",
-    "jellyfin-apiclient-python":     "Jellyfin SDK for Python",
+    "jellyfin-sdk-csharp":           "Jellyfin C# SDK",
+    "jellyfin-sdk-swift":            "Jellyfin Swift SDK",
+    "jellyfin-sdk-kotlin":           "Jellyfin Kotlin SDK",
+    "jellyfin-sdk-typescript":       "Jellyfin TypeScript SDK",
+    "jellyfin-apiclient-javascript": "Jellyfin JavaScript SDK",
+    "jellyfin-apiclient-python":     "Jellyfin Python SDK",
 }
 
 WORD_CASING = {
